@@ -35,7 +35,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	blackfriday "gopkg.in/russross/blackfriday.v2"
 	"html"
 	html_template "html/template"
 	"io"
@@ -54,9 +53,12 @@ import (
 	text_template "text/template"
 	"time"
 
+	blackfriday "gopkg.in/russross/blackfriday.v2"
+
 	"net"
 
 	"encoding/base64"
+
 	web "github.com/dutchcoders/transfer.sh-web"
 	"github.com/gorilla/mux"
 	"github.com/microcosm-cc/bluemonday"
@@ -379,7 +381,7 @@ func MetadataForRequest(contentType string, r *http.Request) Metadata {
 		ContentType:   contentType,
 		MaxDate:       time.Time{},
 		Downloads:     0,
-		MaxDownloads:  -1,
+		MaxDownloads:  1,
 		DeletionToken: Encode(10000000+int64(rand.Intn(1000000000))) + Encode(10000000+int64(rand.Intn(1000000000))),
 	}
 
@@ -626,9 +628,13 @@ func (s *Server) CheckMetadata(token, filename string, increaseDownload bool) (M
 	if err := json.NewDecoder(r).Decode(&metadata); err != nil {
 		return metadata, err
 	} else if metadata.MaxDownloads != -1 && metadata.Downloads >= metadata.MaxDownloads {
-		return metadata, errors.New("MaxDownloads expired.")
+		defer s.storage.Delete(token, filename)
+
+		return metadata, errors.New("maxDownloads expired")
 	} else if !metadata.MaxDate.IsZero() && time.Now().After(metadata.MaxDate) {
-		return metadata, errors.New("MaxDate expired.")
+		defer s.storage.Delete(token, filename)
+
+		return metadata, errors.New("maxDate expired")
 	} else {
 		// todo(nl5887): mutex?
 
